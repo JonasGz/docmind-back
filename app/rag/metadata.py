@@ -52,7 +52,7 @@ Use lista vazia se não houver identificadores claros."""
 @dataclass
 class MetadadosExtraidos:
     title: str | None = None
-    doc_type: DocumentType | None = None
+    doc_type: DocumentType = DocumentType.OUTRO
     raw_doc_type: str | None = None
     identifiers: list[str] = field(default_factory=list)
 
@@ -91,11 +91,11 @@ def _texto(valor: object) -> str | None:
     return valor.strip() if isinstance(valor, str) and valor.strip() else None
 
 
-def _tipo(valor: object) -> DocumentType | None:
+def _tipo(valor: object) -> DocumentType:
     try:
         return DocumentType(valor)
     except ValueError:
-        return None
+        return DocumentType.OUTRO
 
 
 def _identificadores(valor: object) -> list[str]:

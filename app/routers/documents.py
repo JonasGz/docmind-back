@@ -1,6 +1,6 @@
 import uuid
 
-from fastapi import APIRouter, HTTPException, UploadFile, status
+from fastapi import APIRouter, BackgroundTasks, HTTPException, UploadFile, status
 
 from app.config import settings
 from app.dependencies import CurrentUser, DbSession
@@ -14,13 +14,17 @@ from app.services.document_service import (
     DocumentNotFound,
     DocumentService,
 )
+from app.services.ingestion_service import processar_documento
 
 router = APIRouter(prefix="/documents", tags=["documents"])
 
 
 @router.post("", status_code=status.HTTP_202_ACCEPTED)
 async def upload(
-    arquivo: UploadFile, user: CurrentUser, db: DbSession
+    arquivo: UploadFile,
+    user: CurrentUser,
+    db: DbSession,
+    tarefas: BackgroundTasks,
 ) -> DocumentResponse:
     if arquivo.content_type != "application/pdf":
         raise HTTPException(
@@ -35,6 +39,8 @@ async def upload(
         )
     except DocumentError as exc:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc)) from exc
+
+    tarefas.add_task(processar_documento, documento.id, user.id)
 
     return DocumentResponse.model_validate(documento)
 

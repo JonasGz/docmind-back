@@ -1,0 +1,85 @@
+import json
+import logging
+from dataclasses import dataclass, field
+
+from openai import OpenAI
+
+from app.config import settings
+from app.models import DocumentType
+
+logger = logging.getLogger(__name__)
+
+CHUNKS_ANALISADOS = 3
+
+PROMPT = """Analise o início deste documento jurídico brasileiro e extraia seus metadados.
+
+--- DOCUMENTO ---
+{trecho}
+--- FIM ---
+
+Responda apenas com JSON neste formato:
+{{"title": "...", "doc_type": "...", "identifiers": ["...", "..."]}}
+
+- title: o título do documento, conciso
+- doc_type: um de {tipos}
+- identifiers: o que identifica unicamente o documento, conforme o tipo:
+  contrato -> partes contratantes (ex: ["ACME Ltda.", "Beta S.A."])
+  lei -> número e nome comum (ex: ["Lei 8.112/90", "Estatuto do Servidor"])
+  sumula -> número e tribunal (ex: ["Súmula 331", "TST"])
+  jurisprudencia -> processo e tribunal (ex: ["RE 574.706", "STF"])
+  parecer -> número e órgão (ex: ["Parecer 12/2023", "AGU"])
+
+Use lista vazia se não houver identificadores claros."""
+
+
+@dataclass
+class MetadadosExtraidos:
+    title: str | None = None
+    doc_type: DocumentType | None = None
+    identifiers: list[str] = field(default_factory=list)
+
+
+def extrair(trechos: list[str], client: OpenAI | None = None) -> MetadadosExtraidos:
+    if not trechos:
+        return MetadadosExtraidos()
+
+    cliente = client or OpenAI(api_key=settings.openai_api_key)
+    tipos = ", ".join(t.value for t in DocumentType)
+    prompt = PROMPT.format(
+        trecho="\n".join(trechos[:CHUNKS_ANALISADOS]), tipos=tipos
+    )
+
+    try:
+        resposta = cliente.chat.completions.create(
+            model=settings.llm_model,
+            messages=[{"role": "user", "content": prompt}],
+            response_format={"type": "json_object"},
+            temperature=0,
+        )
+        dados = json.loads(resposta.choices[0].message.content or "{}")
+    except Exception:
+        logger.warning("extração de metadados falhou", exc_info=True)
+        return MetadadosExtraidos()
+
+    return MetadadosExtraidos(
+        title=_texto(dados.get("title")),
+        doc_type=_tipo(dados.get("doc_type")),
+        identifiers=_identificadores(dados.get("identifiers")),
+    )
+
+
+def _texto(valor: object) -> str | None:
+    return valor.strip() if isinstance(valor, str) and valor.strip() else None
+
+
+def _tipo(valor: object) -> DocumentType | None:
+    try:
+        return DocumentType(valor)
+    except ValueError:
+        return None
+
+
+def _identificadores(valor: object) -> list[str]:
+    if not isinstance(valor, list):
+        return []
+    return [i.strip() for i in valor if isinstance(i, str) and len(i.strip()) >= 4]

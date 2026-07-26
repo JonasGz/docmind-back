@@ -1,10 +1,16 @@
 from functools import lru_cache
+from typing import Literal, Self
 
+from pydantic import model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+DEV_JWT_SECRET = "dev-secret-inseguro-trocar-em-producao-com-openssl-rand"
 
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+
+    environment: Literal["development", "production"] = "development"
 
     database_url: str = "postgresql+psycopg://docmind:docmind@localhost:5435/docmind"
 
@@ -22,7 +28,7 @@ class Settings(BaseSettings):
     max_upload_mb: int = 20
     stuck_processing_minutes: int = 15
 
-    jwt_secret: str = "dev-secret-trocar-em-producao"
+    jwt_secret: str = DEV_JWT_SECRET
     jwt_algorithm: str = "HS256"
     access_token_minutes: int = 30
     refresh_token_days: int = 30
@@ -33,6 +39,24 @@ class Settings(BaseSettings):
     s3_secret_key: str = "docmind123"
     s3_bucket: str = "documents"
     presigned_url_minutes: int = 10
+
+    @model_validator(mode="after")
+    def exigir_segredos_em_producao(self) -> Self:
+        if self.environment != "production":
+            return self
+
+        faltando = [
+            nome
+            for nome, valor in [
+                ("JWT_SECRET", self.jwt_secret != DEV_JWT_SECRET),
+                ("GOOGLE_CLIENT_ID", bool(self.google_client_id)),
+                ("OPENAI_API_KEY", bool(self.openai_api_key)),
+            ]
+            if not valor
+        ]
+        if faltando:
+            raise ValueError(f"variáveis obrigatórias em produção: {', '.join(faltando)}")
+        return self
 
 
 @lru_cache

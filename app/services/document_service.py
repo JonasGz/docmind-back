@@ -31,7 +31,7 @@ class DocumentService:
             )
 
         documento = self.documentos.create(user_id, filename, storage_key="")
-        chave = f"{user_id}/{documento.id}.pdf"
+        chave = f"{user_id}/documents/{documento.id}.pdf"
 
         storage.upload(chave, conteudo, "application/pdf")
         documento.storage_key = chave

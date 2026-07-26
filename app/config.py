@@ -37,7 +37,7 @@ class Settings(BaseSettings):
     s3_endpoint_url: str | None = "http://localhost:9000"
     s3_access_key: str = "docmind"
     s3_secret_key: str = "docmind123"
-    s3_bucket: str = "documents"
+    s3_bucket: str = "docmind-storage"
     presigned_url_minutes: int = 10
 
     @model_validator(mode="after")

@@ -31,7 +31,6 @@ class ChatService:
         self._retrieval = retrieval
         self._client = client
 
-    # criados sob demanda: rotas que não geram resposta não exigem OPENAI_API_KEY
     @property
     def retrieval(self) -> RetrievalService:
         if self._retrieval is None:

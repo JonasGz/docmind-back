@@ -2,7 +2,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 
-from app.routers import auth, documents
+from app.routers import auth, conversations, documents
 from app.storage.s3 import storage
 
 
@@ -16,6 +16,7 @@ app = FastAPI(title="DocMind API", version="0.1.0", lifespan=lifespan)
 
 app.include_router(auth.router)
 app.include_router(documents.router)
+app.include_router(conversations.router)
 
 
 @app.get("/health")

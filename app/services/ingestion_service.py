@@ -25,7 +25,6 @@ def processar_documento(document_id: uuid.UUID, user_id: uuid.UUID) -> None:
             paginas = loader.extrair_paginas(conteudo)
             chunks = splitter.dividir(paginas)
 
-            # metadado é enriquecimento: falha aqui não impede a indexação
             try:
                 extraidos = metadata.extrair([c.conteudo for c in chunks])
             except Exception:

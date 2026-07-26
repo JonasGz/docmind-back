@@ -1,10 +1,18 @@
 import uuid
+from dataclasses import dataclass
 
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from app.models import DocumentChunk
+from app.models import Document, DocumentChunk
 from app.rag.splitter import ChunkExtraido
+
+
+@dataclass
+class ChunkEncontrado:
+    chunk: DocumentChunk
+    documento: Document
+    score: float
 
 
 class ChunkRepository:
@@ -34,6 +42,33 @@ class ChunkRepository:
         self.db.add_all(registros)
         self.db.flush()
         return len(registros)
+
+    def search(
+        self,
+        user_id: uuid.UUID,
+        embedding: list[float],
+        k: int,
+        threshold: float,
+        document_ids: list[uuid.UUID] | None = None,
+    ) -> list[ChunkEncontrado]:
+        distancia = DocumentChunk.embedding.cosine_distance(embedding)
+
+        stmt = (
+            select(DocumentChunk, Document, distancia.label("distancia"))
+            .join(Document, DocumentChunk.document_id == Document.id)
+            .where(DocumentChunk.user_id == user_id)
+        )
+
+        if document_ids:
+            stmt = stmt.where(DocumentChunk.document_id.in_(document_ids))
+
+        stmt = stmt.order_by(distancia).limit(k)
+
+        return [
+            ChunkEncontrado(chunk=chunk, documento=documento, score=1 - distancia)
+            for chunk, documento, distancia in self.db.execute(stmt)
+            if 1 - distancia >= threshold
+        ]
 
     def contar_por_documento(
         self, document_id: uuid.UUID, user_id: uuid.UUID

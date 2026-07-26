@@ -34,8 +34,14 @@ class DocumentService:
         chave = f"{user_id}/documents/{documento.id}.pdf"
 
         storage.upload(chave, conteudo, "application/pdf")
-        documento.storage_key = chave
-        self.db.commit()
+
+        # o rollback do Postgres não alcança o MinIO: limpeza manual
+        try:
+            documento.storage_key = chave
+            self.db.commit()
+        except Exception:
+            storage.apagar(chave)
+            raise
 
         return documento
 

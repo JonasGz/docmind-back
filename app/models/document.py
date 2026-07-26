@@ -16,11 +16,14 @@ class DocumentStatus(enum.StrEnum):
 
 
 class DocumentType(enum.StrEnum):
-    CONTRATO = "contrato"
-    LEI = "lei"
-    SUMULA = "sumula"
+    NORMA = "norma"
     JURISPRUDENCIA = "jurisprudencia"
+    SUMULA = "sumula"
+    CONTRATO = "contrato"
     PARECER = "parecer"
+    PETICAO = "peticao"
+    COMUNICACAO = "comunicacao"
+    EDITAL = "edital"
     OUTRO = "outro"
 
 
@@ -39,6 +42,7 @@ class Document(Base, UUIDPrimaryKey, TimestampCreated, TimestampUpdated):
 
     title: Mapped[str | None] = mapped_column(String(500))
     doc_type: Mapped[DocumentType | None] = mapped_column(String(20))
+    raw_doc_type: Mapped[str | None] = mapped_column(String(100))
     identifiers: Mapped[list[str] | None] = mapped_column(JSONB)
 
     page_count: Mapped[int | None]

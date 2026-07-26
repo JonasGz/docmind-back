@@ -14,6 +14,7 @@ class DocumentResponse(BaseModel):
     status: DocumentStatus
     title: str | None
     doc_type: DocumentType | None
+    raw_doc_type: str | None
     identifiers: list[str] | None
     page_count: int | None
     chunk_count: int | None

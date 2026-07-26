@@ -45,6 +45,7 @@ def processar_documento(document_id: uuid.UUID, user_id: uuid.UUID) -> None:
 
             documento.title = extraidos.title or documento.filename
             documento.doc_type = extraidos.doc_type
+            documento.raw_doc_type = extraidos.raw_doc_type
             documento.identifiers = extraidos.identifiers
             documento.page_count = len(paginas)
             documento.chunk_count = len(chunks)

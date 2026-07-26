@@ -30,17 +30,7 @@ def detectar(
     if alvos := _match_textual(pergunta, documentos):
         return alvos
 
-    if not _parece_citar_documento(pergunta):
-        return []
-
     return _match_llm(pergunta, documentos, client)
-
-
-def _parece_citar_documento(pergunta: str) -> bool:
-    palavras = pergunta.split()[1:]
-    return any(
-        p[0].isupper() or any(c.isdigit() for c in p) for p in palavras if p
-    )
 
 
 def _normalizar(texto: str) -> str:

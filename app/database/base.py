@@ -9,6 +9,10 @@ class Base(DeclarativeBase):
     pass
 
 
+def valores_do_enum(enum_class) -> list[str]:
+    return [membro.value for membro in enum_class]
+
+
 class UUIDPrimaryKey:
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
 

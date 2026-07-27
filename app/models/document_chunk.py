@@ -23,7 +23,6 @@ class DocumentChunk(Base, UUIDPrimaryKey, TimestampCreated):
     document_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey("documents.id", ondelete="CASCADE"), index=True
     )
-    # denormalizado: o filtro de isolamento não deve depender de JOIN
     user_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey("users.id", ondelete="CASCADE"), index=True
     )

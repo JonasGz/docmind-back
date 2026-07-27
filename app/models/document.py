@@ -1,11 +1,17 @@
 import enum
 import uuid
 
-from sqlalchemy import ForeignKey, Index, String, Text
+from sqlalchemy import Enum, ForeignKey, Index, String, Text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
-from app.database.base import Base, TimestampCreated, TimestampUpdated, UUIDPrimaryKey
+from app.database.base import (
+    Base,
+    TimestampCreated,
+    TimestampUpdated,
+    UUIDPrimaryKey,
+    valores_do_enum,
+)
 
 
 class DocumentStatus(enum.StrEnum):
@@ -37,11 +43,24 @@ class Document(Base, UUIDPrimaryKey, TimestampCreated, TimestampUpdated):
     filename: Mapped[str] = mapped_column(String(500))
     storage_key: Mapped[str] = mapped_column(String(500))
     status: Mapped[DocumentStatus] = mapped_column(
-        String(20), default=DocumentStatus.UPLOADED
+        Enum(
+            DocumentStatus,
+            native_enum=False,
+            length=20,
+            values_callable=valores_do_enum,
+        ),
+        default=DocumentStatus.UPLOADED,
     )
 
     title: Mapped[str | None] = mapped_column(String(500))
-    doc_type: Mapped[DocumentType | None] = mapped_column(String(20))
+    doc_type: Mapped[DocumentType | None] = mapped_column(
+        Enum(
+            DocumentType,
+            native_enum=False,
+            length=20,
+            values_callable=valores_do_enum,
+        )
+    )
     raw_doc_type: Mapped[str | None] = mapped_column(String(100))
     identifiers: Mapped[list[str] | None] = mapped_column(JSONB)
 

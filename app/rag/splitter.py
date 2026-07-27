@@ -8,8 +8,6 @@ from app.rag.loader import PaginaExtraida
 
 SEPARADORES_PADRAO = ["\n\n", "\n", ". ", " ", ""]
 
-# incisos e alíneas ficam de fora de propósito: cortar neles fragmenta o
-# artigo e produz chunks órfãos, sem o comando normativo que os encabeça
 SEPARADORES_LEGISLATIVOS = [
     r"\n\s*Art\.\s*\d+",
     r"\n\s*§\s*\d+",

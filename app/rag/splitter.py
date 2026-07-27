@@ -1,9 +1,24 @@
+import re
 from dataclasses import dataclass
 
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 
 from app.config import settings
 from app.rag.loader import PaginaExtraida
+
+SEPARADORES_PADRAO = ["\n\n", "\n", ". ", " ", ""]
+
+# incisos e alíneas ficam de fora de propósito: cortar neles fragmenta o
+# artigo e produz chunks órfãos, sem o comando normativo que os encabeça
+SEPARADORES_LEGISLATIVOS = [
+    r"\n\s*Art\.\s*\d+",
+    r"\n\s*§\s*\d+",
+    r"\n\s*Parágrafo único",
+    *SEPARADORES_PADRAO,
+]
+
+MARCADOR_ARTIGO = re.compile(r"\bArt\.\s*\d+", re.IGNORECASE)
+MINIMO_ARTIGOS = 3
 
 
 @dataclass
@@ -13,11 +28,19 @@ class ChunkExtraido:
     conteudo: str
 
 
+def e_legislativo(texto: str) -> bool:
+    return len(MARCADOR_ARTIGO.findall(texto)) >= MINIMO_ARTIGOS
+
+
 def dividir(paginas: list[PaginaExtraida]) -> list[ChunkExtraido]:
+    legislativo = e_legislativo("\n".join(p.texto for p in paginas))
+
     splitter = RecursiveCharacterTextSplitter(
         chunk_size=settings.chunk_size,
         chunk_overlap=settings.chunk_overlap,
-        separators=["\n\n", "\n", ". ", " ", ""],
+        separators=SEPARADORES_LEGISLATIVOS if legislativo else SEPARADORES_PADRAO,
+        is_separator_regex=legislativo,
+        keep_separator="start",
     )
 
     chunks: list[ChunkExtraido] = []

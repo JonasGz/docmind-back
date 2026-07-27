@@ -4,6 +4,7 @@ import pytest
 
 from app.models import DocumentStatus, DocumentType
 from app.rag import loader, splitter
+from app.rag.loader import PaginaExtraida
 from app.repositories.chunk import ChunkRepository
 from app.repositories.document import DocumentRepository
 from app.services import ingestion_service
@@ -50,6 +51,38 @@ def test_chunks_herdam_a_pagina_de_origem():
     assert {c.pagina for c in chunks} == {1, 2}
     assert [c.indice for c in chunks] == list(range(len(chunks)))
     assert all("RESCISAO" not in c.conteudo for c in chunks if c.pagina == 1)
+
+
+LEI = """Art. 1º Esta Lei estabelece normas gerais de licitação.
+Art. 2º Aplica-se a administração direta e indireta.
+Art. 55. Os prazos mínimos para apresentação de propostas serão:
+I - para aquisição de bens:
+a) 8 dias úteis, no caso de menor preço;
+b) 25 dias úteis, quando adotados critérios de técnica e preço;
+Art. 56. A modalidade pregão segue o rito comum."""
+
+CONTRATO = """CONTRATO DE PRESTACAO DE SERVICOS
+De um lado ACME Ltda., de outro Beta S.A.
+CLAUSULA PRIMEIRA - DO OBJETO
+Consultoria juridica, observado o Art. 5 da Constituicao.
+CLAUSULA SEGUNDA - DO PRAZO
+Vigencia de 24 meses."""
+
+
+def test_detecta_documento_legislativo():
+    assert splitter.e_legislativo(LEI)
+
+
+def test_contrato_que_cita_artigo_nao_e_legislativo():
+    assert not splitter.e_legislativo(CONTRATO)
+
+
+def test_chunks_de_lei_ancoram_no_comando_normativo():
+    chunks = splitter.dividir([PaginaExtraida(numero=1, texto=LEI)])
+
+    ancorados = [c for c in chunks if c.conteudo.strip().startswith(("Art.", "§"))]
+    assert ancorados
+    assert not any(c.conteudo.strip().startswith(("a)", "b)")) for c in chunks)
 
 
 def test_pipeline_indexa_e_grava_metadados(db, usuario_a, embeddings_falsos):

@@ -22,7 +22,7 @@ class Settings(BaseSettings):
     chunk_size: int = 1000
     chunk_overlap: int = 200
     retrieval_top_k: int = 5
-    similarity_threshold: float = 0.38
+    similarity_threshold: float = 0.50
     history_message_count: int = 10
 
     max_upload_mb: int = 20

@@ -1,6 +1,5 @@
 import io
 import uuid
-from unittest.mock import MagicMock
 
 import pytest
 from fastapi.testclient import TestClient
@@ -97,10 +96,27 @@ def auth(db, usuario: User) -> dict[str, str]:
     return {"Authorization": f"Bearer {token}"}
 
 
+class ModeloFalso:
+    def __init__(self, resposta: str = "Resposta do modelo.", json: dict | None = None):
+        self.modelo_embedding = "text-embedding-3-large"
+        self.resposta = resposta
+        self.json = json or {}
+        self.completar_chamado = False
+
+    def completar(self, mensagens: list[dict[str, str]]) -> str:
+        self.completar_chamado = True
+        return self.resposta
+
+    def completar_json(self, prompt: str) -> dict:
+        return self.json
+
+    def embutir(self, textos: list[str]) -> list[list[float]]:
+        return [[0.1] * 1536 for _ in textos]
+
+    def embutir_um(self, texto: str) -> list[float]:
+        return self.embutir([texto])[0]
+
+
 @pytest.fixture
-def embeddings_falsos():
-    servico = MagicMock()
-    servico.gerar = lambda textos: [[0.1] * 1536 for _ in textos]
-    servico.gerar_um = lambda texto: [0.1] * 1536
-    servico.modelo = "text-embedding-3-large"
-    return servico
+def llm_falso() -> ModeloFalso:
+    return ModeloFalso()

@@ -1,5 +1,3 @@
-from unittest.mock import patch
-
 from app.repositories.chunk import ChunkRepository
 from app.repositories.document import DocumentRepository
 from app.services import ingestion_service
@@ -7,24 +5,17 @@ from app.services.document_service import DocumentService
 from tests.conftest import PDF_CONTRATO, auth
 
 
-def _documento_indexado(db, usuario, embeddings_falsos):
+def _documento_indexado(db, usuario, llm_falso):
     documento = DocumentService(db).upload(usuario.id, "contrato.pdf", PDF_CONTRATO)
-    with patch.object(
-        ingestion_service, "EmbeddingService", return_value=embeddings_falsos
-    ), patch.object(
-        ingestion_service.metadata,
-        "extrair",
-        return_value=ingestion_service.metadata.MetadadosExtraidos(),
-    ):
-        ingestion_service.processar_documento(documento.id, usuario.id)
+    ingestion_service.processar_documento(documento.id, usuario.id, llm=llm_falso)
     db.expire_all()
     return documento
 
 
 def test_busca_vetorial_nao_atravessa_usuarios(
-    db, usuario_a, usuario_b, embeddings_falsos
+    db, usuario_a, usuario_b, llm_falso
 ):
-    _documento_indexado(db, usuario_a, embeddings_falsos)
+    _documento_indexado(db, usuario_a, llm_falso)
 
     chunks = ChunkRepository(db)
     vetor = [0.1] * 1536
@@ -34,9 +25,9 @@ def test_busca_vetorial_nao_atravessa_usuarios(
 
 
 def test_repositorio_nao_entrega_documento_de_outro(
-    db, usuario_a, usuario_b, embeddings_falsos
+    db, usuario_a, usuario_b, llm_falso
 ):
-    documento = _documento_indexado(db, usuario_a, embeddings_falsos)
+    documento = _documento_indexado(db, usuario_a, llm_falso)
     repo = DocumentRepository(db)
 
     assert repo.get(documento.id, usuario_a.id) is not None
@@ -45,9 +36,9 @@ def test_repositorio_nao_entrega_documento_de_outro(
 
 
 def test_contagem_de_chunks_respeita_dono(
-    db, usuario_a, usuario_b, embeddings_falsos
+    db, usuario_a, usuario_b, llm_falso
 ):
-    documento = _documento_indexado(db, usuario_a, embeddings_falsos)
+    documento = _documento_indexado(db, usuario_a, llm_falso)
     chunks = ChunkRepository(db)
 
     assert chunks.contar_por_documento(documento.id, usuario_a.id) > 0
@@ -55,9 +46,9 @@ def test_contagem_de_chunks_respeita_dono(
 
 
 def test_rotas_de_documento_devolvem_404_para_outro_usuario(
-    client, db, usuario_a, usuario_b, embeddings_falsos
+    client, db, usuario_a, usuario_b, llm_falso
 ):
-    documento = _documento_indexado(db, usuario_a, embeddings_falsos)
+    documento = _documento_indexado(db, usuario_a, llm_falso)
     cabecalho_b = auth(db, usuario_b)
 
     assert client.get(f"/documents/{documento.id}", headers=cabecalho_b).status_code == 404

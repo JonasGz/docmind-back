@@ -1,9 +1,9 @@
 import uuid
 
-from openai import OpenAI
 from sqlalchemy.orm import Session
 
 from app.config import settings
+from app.llm import Modelo
 from app.models import Conversation, Message, MessageRole
 from app.rag import prompt
 from app.repositories.chunk import ChunkEncontrado
@@ -23,25 +23,25 @@ class ChatService:
         self,
         db: Session,
         retrieval: RetrievalService | None = None,
-        client: OpenAI | None = None,
+        llm: Modelo | None = None,
     ):
         self.db = db
         self.conversas = ConversationRepository(db)
         self.mensagens = MessageRepository(db)
         self._retrieval = retrieval
-        self._client = client
+        self._llm = llm
 
     @property
     def retrieval(self) -> RetrievalService:
         if self._retrieval is None:
-            self._retrieval = RetrievalService(self.db)
+            self._retrieval = RetrievalService(self.db, llm=self._llm)
         return self._retrieval
 
     @property
-    def client(self) -> OpenAI:
-        if self._client is None:
-            self._client = OpenAI(api_key=settings.openai_api_key)
-        return self._client
+    def llm(self) -> Modelo:
+        if self._llm is None:
+            self._llm = Modelo()
+        return self._llm
 
     def criar_conversa(self, user_id: uuid.UUID, title: str | None) -> Conversation:
         conversa = self.conversas.create(user_id, title or "Nova conversa")
@@ -109,11 +109,9 @@ class ChatService:
         encontrados: list[ChunkEncontrado],
         historico: list[Message],
     ) -> str:
-        resposta = self.client.chat.completions.create(
-            model=settings.llm_model,
-            messages=prompt.montar_mensagens(pergunta, encontrados, historico),
+        return self.llm.completar(
+            prompt.montar_mensagens(pergunta, encontrados, historico)
         )
-        return resposta.choices[0].message.content or ""
 
 
 def _fonte(encontrado: ChunkEncontrado) -> dict:

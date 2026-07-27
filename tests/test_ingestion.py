@@ -1,5 +1,3 @@
-from unittest.mock import MagicMock, patch
-
 import pytest
 
 from app.models import DocumentStatus, DocumentType
@@ -9,24 +7,21 @@ from app.repositories.chunk import ChunkRepository
 from app.repositories.document import DocumentRepository
 from app.services import ingestion_service
 from app.services.document_service import DocumentError, DocumentService
-from tests.conftest import PDF_CONTRATO, PDF_SEM_TEXTO
+from tests.conftest import PDF_CONTRATO, PDF_SEM_TEXTO, ModeloFalso
 
-METADADOS = ingestion_service.metadata.MetadadosExtraidos(
-    title="Contrato de Prestação de Serviços",
-    doc_type=DocumentType.CONTRATO,
-    raw_doc_type="Contrato",
-    identifiers=["ACME Ltda.", "Beta S.A."],
-)
+METADADOS_JSON = {
+    "title": "Contrato de Prestação de Serviços",
+    "doc_type": "contrato",
+    "raw_doc_type": "Contrato",
+    "identifiers": ["ACME Ltda.", "Beta S.A."],
+}
 
 
-def _processar(db, usuario, embeddings_falsos, metadados=METADADOS, erro=None):
+def _processar(db, usuario, llm, metadados=METADADOS_JSON):
     documento = DocumentService(db).upload(usuario.id, "contrato.pdf", PDF_CONTRATO)
-    alvo = {"side_effect": erro} if erro else {"return_value": metadados}
+    llm.json = metadados
 
-    with patch.object(
-        ingestion_service, "EmbeddingService", return_value=embeddings_falsos
-    ), patch.object(ingestion_service.metadata, "extrair", **alvo):
-        ingestion_service.processar_documento(documento.id, usuario.id)
+    ingestion_service.processar_documento(documento.id, usuario.id, llm=llm)
 
     db.expire_all()
     return DocumentRepository(db).get(documento.id, usuario.id)
@@ -85,8 +80,8 @@ def test_chunks_de_lei_ancoram_no_comando_normativo():
     assert not any(c.conteudo.strip().startswith(("a)", "b)")) for c in chunks)
 
 
-def test_pipeline_indexa_e_grava_metadados(db, usuario_a, embeddings_falsos):
-    documento = _processar(db, usuario_a, embeddings_falsos)
+def test_pipeline_indexa_e_grava_metadados(db, usuario_a, llm_falso):
+    documento = _processar(db, usuario_a, llm_falso)
 
     assert documento.status == DocumentStatus.INDEXED
     assert documento.title == "Contrato de Prestação de Serviços"
@@ -100,10 +95,12 @@ def test_pipeline_indexa_e_grava_metadados(db, usuario_a, embeddings_falsos):
     assert gravados == documento.chunk_count
 
 
-def test_falha_de_metadados_nao_impede_indexacao(db, usuario_a, embeddings_falsos):
-    documento = _processar(
-        db, usuario_a, embeddings_falsos, erro=RuntimeError("LLM fora")
-    )
+def test_falha_de_metadados_nao_impede_indexacao(db, usuario_a):
+    class MetadadosQuebrados(ModeloFalso):
+        def completar_json(self, prompt):
+            raise RuntimeError("LLM fora")
+
+    documento = _processar(db, usuario_a, MetadadosQuebrados())
 
     assert documento.status == DocumentStatus.INDEXED
     assert documento.title == "contrato.pdf"
@@ -112,10 +109,11 @@ def test_falha_de_metadados_nao_impede_indexacao(db, usuario_a, embeddings_falso
 
 
 def test_falha_de_embedding_marca_documento_como_falho(db, usuario_a):
-    quebrado = MagicMock()
-    quebrado.gerar.side_effect = RuntimeError("API indisponível")
+    class EmbeddingQuebrado(ModeloFalso):
+        def embutir(self, textos):
+            raise RuntimeError("API indisponível")
 
-    documento = _processar(db, usuario_a, quebrado)
+    documento = _processar(db, usuario_a, EmbeddingQuebrado())
 
     assert documento.status == DocumentStatus.FAILED
     assert "API indisponível" in documento.error_message

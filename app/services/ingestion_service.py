@@ -2,17 +2,25 @@ import logging
 import uuid
 
 from app.database.session import SessionLocal
+from app.llm import Modelo
 from app.models import DocumentStatus
 from app.rag import loader, metadata, splitter
 from app.repositories.chunk import ChunkRepository
 from app.repositories.document import DocumentRepository
-from app.services.embedding_service import EmbeddingService
-from app.storage.s3 import storage
+from app.storage.s3 import Storage, storage as storage_padrao
 
 logger = logging.getLogger(__name__)
 
 
-def processar_documento(document_id: uuid.UUID, user_id: uuid.UUID) -> None:
+def processar_documento(
+    document_id: uuid.UUID,
+    user_id: uuid.UUID,
+    llm: Modelo | None = None,
+    storage: Storage | None = None,
+) -> None:
+    llm = llm or Modelo()
+    storage = storage or storage_padrao
+
     with SessionLocal() as db:
         documentos = DocumentRepository(db)
         documento = documentos.get(document_id, user_id)
@@ -26,20 +34,19 @@ def processar_documento(document_id: uuid.UUID, user_id: uuid.UUID) -> None:
             chunks = splitter.dividir(paginas)
 
             try:
-                extraidos = metadata.extrair([c.conteudo for c in chunks])
+                extraidos = metadata.extrair([c.conteudo for c in chunks], llm=llm)
             except Exception:
                 logger.warning("extração de metadados falhou", exc_info=True)
                 extraidos = metadata.MetadadosExtraidos()
 
-            embeddings = EmbeddingService()
-            vetores = embeddings.gerar([c.conteudo for c in chunks])
+            vetores = llm.embutir([c.conteudo for c in chunks])
 
             ChunkRepository(db).create_many(
                 document_id=documento.id,
                 user_id=documento.user_id,
                 chunks=chunks,
                 embeddings=vetores,
-                embedding_model=embeddings.modelo,
+                embedding_model=llm.modelo_embedding,
             )
 
             documento.title = extraidos.title or documento.filename

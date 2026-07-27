@@ -1,10 +1,7 @@
-import json
 import logging
 from dataclasses import dataclass, field
 
-from openai import OpenAI
-
-from app.config import settings
+from app.llm import Modelo
 from app.models import DocumentType
 
 logger = logging.getLogger(__name__)
@@ -57,24 +54,17 @@ class MetadadosExtraidos:
     identifiers: list[str] = field(default_factory=list)
 
 
-def extrair(trechos: list[str], client: OpenAI | None = None) -> MetadadosExtraidos:
+def extrair(trechos: list[str], llm: Modelo | None = None) -> MetadadosExtraidos:
     if not trechos:
         return MetadadosExtraidos()
 
-    cliente = client or OpenAI(api_key=settings.openai_api_key)
     tipos = ", ".join(t.value for t in DocumentType)
     prompt = PROMPT.format(
         trecho="\n".join(trechos[:CHUNKS_ANALISADOS]), tipos=tipos
     )
 
     try:
-        resposta = cliente.chat.completions.create(
-            model=settings.llm_model,
-            messages=[{"role": "user", "content": prompt}],
-            response_format={"type": "json_object"},
-            temperature=0,
-        )
-        dados = json.loads(resposta.choices[0].message.content or "{}")
+        dados = (llm or Modelo()).completar_json(prompt)
     except Exception:
         logger.warning("extração de metadados falhou", exc_info=True)
         return MetadadosExtraidos()

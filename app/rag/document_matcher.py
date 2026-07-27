@@ -1,11 +1,8 @@
-import json
 import logging
 import unicodedata
 import uuid
 
-from openai import OpenAI
-
-from app.config import settings
+from app.llm import Modelo
 from app.models import Document
 
 logger = logging.getLogger(__name__)
@@ -22,7 +19,7 @@ Lista vazia se for genérica ou não citar nenhum."""
 
 
 def detectar(
-    pergunta: str, documentos: list[Document], client: OpenAI | None = None
+    pergunta: str, documentos: list[Document], llm: Modelo | None = None
 ) -> list[uuid.UUID]:
     if not documentos:
         return []
@@ -30,7 +27,7 @@ def detectar(
     if alvos := _match_textual(pergunta, documentos):
         return alvos
 
-    return _match_llm(pergunta, documentos, client)
+    return _match_llm(pergunta, documentos, llm)
 
 
 def _normalizar(texto: str) -> str:
@@ -50,7 +47,7 @@ def _match_textual(pergunta: str, documentos: list[Document]) -> list[uuid.UUID]
 
 
 def _match_llm(
-    pergunta: str, documentos: list[Document], client: OpenAI | None
+    pergunta: str, documentos: list[Document], llm: Modelo | None
 ) -> list[uuid.UUID]:
     catalogo = "\n".join(
         f"{i}. [{doc.doc_type}] {doc.title} — "
@@ -59,19 +56,10 @@ def _match_llm(
     )
 
     try:
-        cliente = client or OpenAI(api_key=settings.openai_api_key)
-        resposta = cliente.chat.completions.create(
-            model=settings.llm_model,
-            messages=[
-                {
-                    "role": "user",
-                    "content": PROMPT.format(catalogo=catalogo, pergunta=pergunta),
-                }
-            ],
-            response_format={"type": "json_object"},
-            temperature=0,
+        dados = (llm or Modelo()).completar_json(
+            PROMPT.format(catalogo=catalogo, pergunta=pergunta)
         )
-        indices = json.loads(resposta.choices[0].message.content or "{}")["indices"]
+        indices = dados["indices"]
     except Exception:
         logger.warning("detecção por LLM falhou", exc_info=True)
         return []

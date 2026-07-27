@@ -8,6 +8,7 @@ from reportlab.lib.pagesizes import A4
 from reportlab.pdfgen import canvas
 from sqlalchemy import text
 
+from app.config import settings
 from app.database.session import SessionLocal, engine
 from app.main import app
 from app.models import User
@@ -45,13 +46,23 @@ PDF_CONTRATO = _gerar_pdf(
 PDF_SEM_TEXTO = _gerar_pdf([[]])
 
 
+TABELAS = "users, documents, document_chunks, conversations, messages"
+
+
+def pytest_configure() -> None:
+    if "test" not in settings.database_url:
+        pytest.exit(
+            "DATABASE_URL não aponta para um banco de teste. "
+            "Rode com: DATABASE_URL=...docmind_test uv run pytest",
+            returncode=1,
+        )
+
+
 @pytest.fixture(autouse=True)
 def limpar_banco():
     yield
     with engine.begin() as conn:
-        conn.execute(
-            text("TRUNCATE users, documents, document_chunks, conversations, messages CASCADE")
-        )
+        conn.execute(text(f"TRUNCATE {TABELAS} CASCADE"))
 
 
 @pytest.fixture

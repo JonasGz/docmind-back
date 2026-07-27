@@ -42,6 +42,10 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def exigir_segredos_em_producao(self) -> Self:
+        # .env com "JWT_SECRET=" sobrescreve o default por vazio
+        if not self.jwt_secret:
+            self.jwt_secret = DEV_JWT_SECRET
+
         if self.environment != "production":
             return self
 

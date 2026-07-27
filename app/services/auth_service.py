@@ -50,7 +50,7 @@ class AuthService:
 
         try:
             claims = google_id_token.verify_oauth2_token(
-                token, google_requests.Request(), settings.google_client_id
+                token, google_requests.Request(), settings.google_audiences
             )
         except ValueError as exc:
             raise AuthError("id_token inválido") from exc

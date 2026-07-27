@@ -7,7 +7,7 @@ from app.repositories.chunk import ChunkRepository
 from app.repositories.document import DocumentRepository
 from app.services import ingestion_service
 from app.services.document_service import DocumentError, DocumentService
-from tests.conftest import PDF_CONTRATO, PDF_SEM_TEXTO, ModeloFalso
+from tests.conftest import PDF_CONTRATO, PDF_SEM_TEXTO, ModeloFalso, auth
 
 METADADOS_JSON = {
     "title": "Contrato de Prestação de Serviços",
@@ -128,3 +128,16 @@ def test_upload_rejeita_arquivo_vazio(db, usuario_a):
 def test_upload_rejeita_arquivo_grande(db, usuario_a):
     with pytest.raises(DocumentError, match="limite"):
         DocumentService(db).upload(usuario_a.id, "grande.pdf", b"x" * (21 * 1024 * 1024))
+
+
+def test_upload_http_aceita_campo_file(client, db, usuario_a, monkeypatch):
+    monkeypatch.setattr(ingestion_service, "processar_documento", lambda *a: None)
+
+    resposta = client.post(
+        "/documents",
+        files={"file": ("contrato.pdf", PDF_CONTRATO, "application/pdf")},
+        headers=auth(db, usuario_a),
+    )
+
+    assert resposta.status_code == 202, resposta.text
+    assert resposta.json()["filename"] == "contrato.pdf"

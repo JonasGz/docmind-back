@@ -33,6 +33,12 @@ class Settings(BaseSettings):
     access_token_minutes: int = 30
     refresh_token_days: int = 30
     google_client_id: str = ""
+    google_client_ids_extra: str = ""
+
+    @property
+    def google_audiences(self) -> list[str]:
+        extras = [c.strip() for c in self.google_client_ids_extra.split(",")]
+        return [c for c in [self.google_client_id, *extras] if c]
 
     s3_endpoint_url: str | None = "http://localhost:9000"
     s3_access_key: str = "docmind"

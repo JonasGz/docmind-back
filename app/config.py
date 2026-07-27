@@ -20,7 +20,7 @@ class Settings(BaseSettings):
     embedding_dimensions: int = 1536
 
     chunk_size: int = 1000
-    chunk_overlap: int = 200
+    chunk_overlap: int = 400
     retrieval_top_k: int = 5
     similarity_threshold: float = 0.50
     history_message_count: int = 10

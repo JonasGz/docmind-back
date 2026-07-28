@@ -1,7 +1,10 @@
+import uuid
+from types import SimpleNamespace
 from unittest.mock import patch
 
 from app.models import MessageRole
 from app.rag import prompt
+from app.repositories.chunk import ChunkEncontrado
 from app.repositories.message import MessageRepository
 from app.services.chat_service import ChatService
 from app.services.retrieval_service import RetrievalService
@@ -58,6 +61,84 @@ def test_sem_contexto_relevante_nao_chama_a_llm(db, usuario_a, llm_falso):
     assert resposta.content == prompt.SEM_CONTEXTO
     assert resposta.sources == []
     assert not llm.completar_chamado
+
+
+def _encontrado(documento, page: int, content: str, score: float):
+    chunk = SimpleNamespace(page=page, content=content)
+    return ChunkEncontrado(chunk=chunk, documento=documento, score=score)
+
+
+def _documento(nome: str = "Contrato de Locação"):
+    return SimpleNamespace(id=uuid.uuid4(), title=nome, filename=f"{nome}.pdf",
+                           identifiers=None)
+
+
+def test_resposta_sem_etiqueta_nao_traz_fontes(db, usuario_a, llm_falso):
+    documento = _documento()
+    encontrados = [
+        _encontrado(documento, 4, "trecho irrelevante", 0.55),
+        _encontrado(documento, 9, "outro trecho irrelevante", 0.52),
+    ]
+    llm_falso.resposta = "Não encontrei informação sobre isso nos documentos."
+    servico, _ = _chat(db, llm_falso)
+    conversa = servico.criar_conversa(usuario_a.id, None)
+
+    with patch.object(servico.retrieval, "buscar", return_value=encontrados):
+        resposta = servico.responder(conversa.id, usuario_a.id, "pergunta sem resposta")
+
+    assert resposta.sources == []
+
+
+def test_fontes_sao_apenas_as_citadas_e_uma_por_pagina(db, usuario_a, llm_falso):
+    documento = _documento()
+    encontrados = [
+        _encontrado(documento, 4, "prazo de 36 meses", 0.91),
+        _encontrado(documento, 6, "rescisão antecipada", 0.88),
+        _encontrado(documento, 6, "multa de três aluguéis", 0.72),
+        _encontrado(documento, 20, "trecho não citado", 0.51),
+    ]
+    llm_falso.resposta = (
+        "O prazo é de 36 meses (Contrato de Locação, p.4) [1]. "
+        "A rescisão exige multa (Contrato de Locação, p.6) [2][3]."
+    )
+    servico, _ = _chat(db, llm_falso)
+    conversa = servico.criar_conversa(usuario_a.id, None)
+
+    with patch.object(servico.retrieval, "buscar", return_value=encontrados):
+        resposta = servico.responder(conversa.id, usuario_a.id, "prazo e rescisão?")
+
+    assert [(f["page"], f["score"]) for f in resposta.sources] == [(4, 0.91), (6, 0.88)]
+    assert resposta.content == (
+        "O prazo é de 36 meses (Contrato de Locação, p.4). "
+        "A rescisão exige multa (Contrato de Locação, p.6)."
+    )
+
+
+def test_etiqueta_inexistente_e_ignorada(db, usuario_a, llm_falso):
+    documento = _documento()
+    encontrados = [_encontrado(documento, 4, "único trecho", 0.91)]
+    llm_falso.resposta = "Afirmação com etiqueta inventada [7]."
+    servico, _ = _chat(db, llm_falso)
+    conversa = servico.criar_conversa(usuario_a.id, None)
+
+    with patch.object(servico.retrieval, "buscar", return_value=encontrados):
+        resposta = servico.responder(conversa.id, usuario_a.id, "pergunta")
+
+    assert resposta.sources == []
+    assert resposta.content == "Afirmação com etiqueta inventada."
+
+
+def test_contexto_numera_trechos_para_a_llm():
+    documento = _documento()
+    contexto = prompt.montar_contexto(
+        [
+            _encontrado(documento, 4, "prazo de 36 meses", 0.91),
+            _encontrado(documento, 6, "rescisão antecipada", 0.88),
+        ]
+    )
+
+    assert "[1] (p.4) prazo de 36 meses" in contexto
+    assert "[2] (p.6) rescisão antecipada" in contexto
 
 
 def test_titulo_vem_da_primeira_pergunta(db, usuario_a, llm_falso):

@@ -93,12 +93,13 @@ class ChatService:
             conversa.id, settings.history_message_count
         )
         texto = self._gerar(pergunta, encontrados, historico[:-1])
+        citados = prompt.extrair_citados(texto, encontrados)
 
         resposta = self.mensagens.create(
             conversa.id,
             MessageRole.ASSISTANT,
-            texto,
-            sources=[_fonte(e) for e in encontrados],
+            prompt.remover_etiquetas(texto),
+            sources=[_fonte(e) for e in _uma_por_pagina(citados)],
         )
         self.db.commit()
         return resposta
@@ -112,6 +113,16 @@ class ChatService:
         return self.llm.completar(
             prompt.montar_mensagens(pergunta, encontrados, historico)
         )
+
+
+def _uma_por_pagina(encontrados: list[ChunkEncontrado]) -> list[ChunkEncontrado]:
+    melhores: dict[tuple[uuid.UUID, int], ChunkEncontrado] = {}
+    for item in encontrados:
+        chave = (item.documento.id, item.chunk.page)
+        atual = melhores.get(chave)
+        if atual is None or item.score > atual.score:
+            melhores[chave] = item
+    return list(melhores.values())
 
 
 def _fonte(encontrado: ChunkEncontrado) -> dict:
